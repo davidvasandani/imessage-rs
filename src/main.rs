@@ -245,7 +245,7 @@ async fn run_server(config: AppConfig) -> Result<()> {
         (None, None)
     };
     #[cfg(not(feature = "private-api"))]
-    let (private_api_service, private_api_handle) = {
+    let (private_api_service, private_api_handle): (Option<Arc<()>>, Option<tokio::task::JoinHandle<()>>) = {
         info!("Private API is disabled (feature not compiled), skipping TCP service");
         (None, None)
     };

@@ -19,7 +19,11 @@ path = "src/main.rs"
 
 [features]
 default = ["private-api"]
-private-api = ["imessage-private-api", "imessage-private-api/swift-helper"]
+private-api = [
+    "imessage-private-api",
+    "imessage-private-api/swift-helper",
+    "imessage-http/private-api",
+]
 
 [dependencies]
 imessage-core = { workspace = true }
@@ -125,6 +129,6 @@ imessage-db = { path = "crates/imessage-db", version = "0.1.0" }
 imessage-serializers = { path = "crates/imessage-serializers", version = "0.1.0" }
 imessage-private-api = { path = "crates/imessage-private-api", version = "0.1.0" }
 imessage-apple = { path = "crates/imessage-apple", version = "0.1.0" }
-imessage-http = { path = "crates/imessage-http", version = "0.1.0" }
+imessage-http = { path = "crates/imessage-http", version = "0.1.0", default-features = false }
 imessage-watcher = { path = "crates/imessage-watcher", version = "0.1.0" }
 imessage-webhooks = { path = "crates/imessage-webhooks", version = "0.1.0" }
