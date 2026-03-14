@@ -8,6 +8,7 @@ use serde_json::Value;
 
 use imessage_core::config::AppConfig;
 use imessage_db::imessage::repository::MessageRepository;
+#[cfg(feature = "private-api")]
 use imessage_private_api::service::PrivateApiService;
 use imessage_webhooks::service::WebhookService;
 
@@ -23,7 +24,10 @@ pub type FindMyFriendsCache = (HashMap<String, Value>, Option<Instant>);
 pub struct AppState {
     pub config: Arc<AppConfig>,
     pub imessage_repo: Arc<Mutex<MessageRepository>>,
+    #[cfg(feature = "private-api")]
     pub private_api: Option<Arc<PrivateApiService>>,
+    #[cfg(not(feature = "private-api"))]
+    pub private_api: Option<Arc<()>>,
     pub webhook_service: Option<Arc<WebhookService>>,
     /// Cached FindMy friends locations (handle -> location JSON) + last refresh time
     pub findmy_friends_cache: Arc<Mutex<FindMyFriendsCache>>,
@@ -38,6 +42,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    #[cfg(feature = "private-api")]
     pub fn new(
         config: AppConfig,
         imessage_repo: MessageRepository,
@@ -57,8 +62,29 @@ impl AppState {
         }
     }
 
+    #[cfg(not(feature = "private-api"))]
+    pub fn new(
+        config: AppConfig,
+        imessage_repo: MessageRepository,
+        _private_api: Option<Arc<()>>,
+        webhook_service: Option<Arc<WebhookService>>,
+    ) -> Self {
+        Self {
+            config: Arc::new(config),
+            imessage_repo: Arc::new(Mutex::new(imessage_repo)),
+            private_api: None,
+            webhook_service,
+            findmy_friends_cache: Arc::new(Mutex::new((HashMap::new(), None))),
+            findmy_key: Arc::new(Mutex::new(None)),
+            send_cache: Arc::new(Mutex::new(HashMap::new())),
+            typing_cache: Arc::new(Mutex::new(HashSet::new())),
+            findmy_refresh_lock: Arc::new(tokio::sync::Mutex::new(())),
+        }
+    }
+
     /// Get a reference to the Private API service, or return an error if not available/ready.
     /// Requires the Messages.app dylib to have completed IMCore initialization.
+    #[cfg(feature = "private-api")]
     pub fn require_private_api(&self) -> Result<Arc<PrivateApiService>, AppError> {
         let api = self
             .private_api
@@ -72,8 +98,14 @@ impl AppState {
         Ok(api.clone())
     }
 
+    #[cfg(not(feature = "private-api"))]
+    pub fn require_private_api(&self) -> Result<Arc<()>, AppError> {
+        Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
+    }
+
     /// Get a reference to the FindMy Private API service, or return an error if not enabled/ready.
     /// Requires the FindMy.app dylib to be connected and ready.
+    #[cfg(feature = "private-api")]
     pub fn require_findmy_private_api(&self) -> Result<Arc<PrivateApiService>, AppError> {
         if !self.config.enable_findmy_private_api {
             return Err(AppError::imessage_error(
@@ -92,8 +124,14 @@ impl AppState {
         Ok(api.clone())
     }
 
+    #[cfg(not(feature = "private-api"))]
+    pub fn require_findmy_private_api(&self) -> Result<Arc<()>, AppError> {
+        Err(AppError::imessage_error("FindMy Private API is not compiled (feature disabled)"))
+    }
+
     /// Get a reference to the FaceTime Private API service, or return an error if not enabled/ready.
     /// Requires the FaceTime.app dylib to be connected and ready.
+    #[cfg(feature = "private-api")]
     pub fn require_facetime_private_api(&self) -> Result<Arc<PrivateApiService>, AppError> {
         if !self.config.enable_facetime_private_api {
             return Err(AppError::imessage_error(
@@ -110,6 +148,11 @@ impl AppState {
             ));
         }
         Ok(api.clone())
+    }
+
+    #[cfg(not(feature = "private-api"))]
+    pub fn require_facetime_private_api(&self) -> Result<Arc<()>, AppError> {
+        Err(AppError::imessage_error("FaceTime Private API is not compiled (feature disabled)"))
     }
 
     /// Check if a tempGuid is already in the send cache
