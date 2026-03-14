@@ -9,10 +9,13 @@ use imessage_core::macos::{macos_version, require_min_sequoia};
 use imessage_db::imessage::repository::MessageRepository;
 use imessage_http::server::start_server;
 use imessage_http::state::AppState;
+#[cfg(feature = "private-api")]
 use imessage_private_api::events::{
     FaceTimeStatus, event_types, parse_facetime_event, parse_findmy_locations, parse_typing_event,
 };
+#[cfg(feature = "private-api")]
 use imessage_private_api::injection::inject_app_dylib;
+#[cfg(feature = "private-api")]
 use imessage_private_api::service::PrivateApiService;
 use imessage_watcher::listener::IMessageListener;
 use imessage_webhooks::service::WebhookService;
@@ -194,9 +197,11 @@ async fn run_server(config: AppConfig) -> Result<()> {
     });
 
     // Start Private API TCP service (if any Private API feature is enabled)
+    #[cfg(feature = "private-api")]
     let need_private_api = config.enable_private_api
         || config.enable_facetime_private_api
         || config.enable_findmy_private_api;
+    #[cfg(feature = "private-api")]
     let (private_api_service, private_api_handle) = if need_private_api {
         let mut private_api = PrivateApiService::new();
         match private_api.start().await {
@@ -239,6 +244,11 @@ async fn run_server(config: AppConfig) -> Result<()> {
         info!("Private API is disabled, skipping TCP service");
         (None, None)
     };
+    #[cfg(not(feature = "private-api"))]
+    let (private_api_service, private_api_handle) = {
+        info!("Private API is disabled (feature not compiled), skipping TCP service");
+        (None, None)
+    };
 
     // Keep config values for cleanup
     let cleanup_enable_private_api = config.enable_private_api;
@@ -255,6 +265,7 @@ async fn run_server(config: AppConfig) -> Result<()> {
 
     // Spawn FindMy event handler: subscribe to Private API events and populate
     // the findmy_friends_cache when new-findmy-location events arrive
+    #[cfg(feature = "private-api")]
     if let Some(ref api) = state.private_api {
         let mut event_rx = api.subscribe_events();
         let cache = state.findmy_friends_cache.clone();
@@ -322,6 +333,7 @@ async fn run_server(config: AppConfig) -> Result<()> {
     }
 
     // Bridge Private API events → webhook dispatch (typing, FaceTime, aliases, FindMy)
+    #[cfg(feature = "private-api")]
     let pa_webhook_handle = if let Some(ref api) = state.private_api {
         let mut event_rx = api.subscribe_events();
         let ws = webhook_service.clone();
@@ -432,6 +444,8 @@ async fn run_server(config: AppConfig) -> Result<()> {
     } else {
         None
     };
+    #[cfg(not(feature = "private-api"))]
+    let pa_webhook_handle: Option<tokio::task::JoinHandle<()>> = None;
 
     // Spawn send cache purge task: every 5 minutes, remove entries older than 5 minutes
     {
@@ -487,26 +501,29 @@ async fn run_server(config: AppConfig) -> Result<()> {
     }
 
     // Kill injected app processes on clean shutdown
-    if cleanup_enable_private_api {
-        info!("Stopping injected Messages.app process...");
-        let _ = tokio::process::Command::new("killall")
-            .arg("Messages")
-            .output()
-            .await;
-    }
-    if cleanup_enable_findmy {
-        info!("Stopping injected FindMy.app process...");
-        let _ = tokio::process::Command::new("killall")
-            .arg("FindMy")
-            .output()
-            .await;
-    }
-    if cleanup_enable_facetime {
-        info!("Stopping injected FaceTime.app process...");
-        let _ = tokio::process::Command::new("killall")
-            .arg("FaceTime")
-            .output()
-            .await;
+    #[cfg(feature = "private-api")]
+    {
+        if cleanup_enable_private_api {
+            info!("Stopping injected Messages.app process...");
+            let _ = tokio::process::Command::new("killall")
+                .arg("Messages")
+                .output()
+                .await;
+        }
+        if cleanup_enable_findmy {
+            info!("Stopping injected FindMy.app process...");
+            let _ = tokio::process::Command::new("killall")
+                .arg("FindMy")
+                .output()
+                .await;
+        }
+        if cleanup_enable_facetime {
+            info!("Stopping injected FaceTime.app process...");
+            let _ = tokio::process::Command::new("killall")
+                .arg("FaceTime")
+                .output()
+                .await;
+        }
     }
 
     let pid_file = AppPaths::pid_file();
