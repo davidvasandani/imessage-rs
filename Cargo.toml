@@ -17,13 +17,17 @@ categories = ["api-bindings", "command-line-utilities"]
 name = "imessage-rs"
 path = "src/main.rs"
 
+[features]
+default = ["private-api"]
+private-api = ["imessage-private-api", "imessage-private-api/swift-helper"]
+
 [dependencies]
 imessage-core = { workspace = true }
 imessage-db = { workspace = true }
 imessage-http = { workspace = true }
 imessage-watcher = { workspace = true }
 imessage-webhooks = { workspace = true }
-imessage-private-api = { workspace = true }
+imessage-private-api = { workspace = true, optional = true }
 parking_lot = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
