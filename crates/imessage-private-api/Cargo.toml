@@ -13,6 +13,10 @@ documentation = "https://docs.rs/imessage-private-api"
 keywords = ["imessage", "facetime", "findmy", "macos", "private-api"]
 categories = ["api-bindings", "network-programming"]
 
+[features]
+default = []
+swift-helper = []
+
 [dependencies]
 imessage-core = { workspace = true }
 tokio = { workspace = true }

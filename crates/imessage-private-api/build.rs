@@ -2,6 +2,12 @@ fn main() {
     println!("cargo:rerun-if-changed=swift/Sources");
     println!("cargo:rerun-if-changed=swift/Makefile");
 
+    // Skip Swift helper build if feature is not enabled
+    if std::env::var("CARGO_FEATURE_SWIFT_HELPER").is_err() {
+        println!("cargo:warning=Skipping Swift helper build (swift-helper feature disabled)");
+        return;
+    }
+
     if std::env::consts::OS != "macos" {
         return;
     }
