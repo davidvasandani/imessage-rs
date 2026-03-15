@@ -16,6 +16,7 @@ use crate::state::AppState;
 ///
 /// Generate a new FaceTime link. The server briefly joins the call to act as
 /// "host", admits remote users from the waiting room, then silently leaves.
+#[cfg(feature = "private-api")]
 pub async fn create_session(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let api = state.require_facetime_private_api()?;
 
@@ -23,13 +24,19 @@ pub async fn create_session(State(state): State<AppState>) -> Result<Json<Value>
         .await
         .map_err(|e| AppError::imessage_error(&e))?;
 
-    Ok(Json(success_response(json!({ "link": link }))))
+    Ok(Json(success_response(json!({ "link": link }
+
+#[cfg(not(feature = "private-api"))]
+pub async fn create_session(_State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+    Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
+}))))
 }
 
 /// POST /api/v1/facetime/answer/:call_uuid
 ///
 /// Answer an incoming FaceTime call, generate a shareable link, and run the
 /// admit-and-leave flow in the background.
+#[cfg(feature = "private-api")]
 pub async fn answer_call(
     State(state): State<AppState>,
     Path(call_uuid): Path<String>,
@@ -45,6 +52,7 @@ pub async fn answer_call(
 
 /// POST /api/v1/facetime/leave/:call_uuid
 /// Returns 201 with NoData.
+#[cfg(feature = "private-api")]
 pub async fn leave_call(
     State(state): State<AppState>,
     Path(call_uuid): Path<String>,

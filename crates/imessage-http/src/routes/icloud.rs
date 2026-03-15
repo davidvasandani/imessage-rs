@@ -20,6 +20,7 @@ use crate::middleware::error::{AppError, success_response, success_response_with
 use crate::state::AppState;
 
 /// GET /api/v1/icloud/account [Private API]
+#[cfg(feature = "private-api")]
 pub async fn get_account_info(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
     let api = state.require_private_api()?;
     let action = actions::get_account_info();
@@ -36,6 +37,11 @@ pub async fn get_account_info(State(state): State<AppState>) -> Result<Json<Valu
     )))
 }
 
+#[cfg(not(feature = "private-api"))]
+pub async fn get_account_info(State(_state): State<AppState>) -> Result<Json<Value>, AppError> {
+    Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
+}
+
 /// POST /api/v1/icloud/account/alias body
 #[derive(Debug, Deserialize)]
 pub struct ChangeAliasBody {
@@ -43,6 +49,7 @@ pub struct ChangeAliasBody {
 }
 
 /// POST /api/v1/icloud/account/alias [Private API]
+#[cfg(feature = "private-api")]
 pub async fn change_alias(
     State(state): State<AppState>,
     AppJson(body): AppJson<ChangeAliasBody>,
@@ -94,6 +101,14 @@ pub async fn change_alias(
     )))
 }
 
+#[cfg(not(feature = "private-api"))]
+pub async fn change_alias(
+    State(_state): State<AppState>,
+    AppJson(_body): AppJson<ChangeAliasBody>,
+) -> Result<Json<Value>, AppError> {
+    Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
+}
+
 /// GET /api/v1/icloud/contact query params
 #[derive(Debug, Deserialize, Default)]
 pub struct ContactCardParams {
@@ -101,6 +116,7 @@ pub struct ContactCardParams {
 }
 
 /// GET /api/v1/icloud/contact [Private API]
+#[cfg(feature = "private-api")]
 pub async fn get_contact_card(
     State(state): State<AppState>,
     Query(params): Query<ContactCardParams>,
@@ -141,6 +157,14 @@ pub async fn get_contact_card(
     )))
 }
 
+#[cfg(not(feature = "private-api"))]
+pub async fn get_contact_card(
+    State(_state): State<AppState>,
+    Query(_params): Query<ContactCardParams>,
+) -> Result<Json<Value>, AppError> {
+    Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
+}
+
 /// GET /api/v1/icloud/findmy/devices [FindMy Private API]
 /// Reads and decrypts the FindMy device cache from disk.
 /// The decryption key is fetched on startup; if not yet available, this triggers a fetch.
@@ -175,6 +199,7 @@ pub async fn get_findmy_friends(State(state): State<AppState>) -> Result<Json<Va
 /// POST /api/v1/icloud/findmy/devices/refresh [FindMy Private API]
 /// Restarts FindMy.app to force a fresh FMIP server fetch, waits for the cache
 /// to be updated, then re-reads and decrypts the device data.
+#[cfg(feature = "private-api")]
 pub async fn refresh_findmy_devices(
     State(state): State<AppState>,
 ) -> Result<Json<Value>, AppError> {
@@ -229,7 +254,15 @@ pub async fn refresh_findmy_devices(
     )))
 }
 
+#[cfg(not(feature = "private-api"))]
+pub async fn refresh_findmy_devices(
+    State(_state): State<AppState>,
+) -> Result<Json<Value>, AppError> {
+    Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
+}
+
 /// POST /api/v1/icloud/findmy/friends/refresh [Private API]
+#[cfg(feature = "private-api")]
 pub async fn refresh_findmy_friends(
     State(state): State<AppState>,
 ) -> Result<Json<Value>, AppError> {
@@ -243,7 +276,15 @@ pub async fn refresh_findmy_friends(
     )))
 }
 
+#[cfg(not(feature = "private-api"))]
+pub async fn refresh_findmy_friends(
+    State(_state): State<AppState>,
+) -> Result<Json<Value>, AppError> {
+    Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
+}
+
 /// Shared refresh logic: fetches friend locations from the dylib and updates the cache.
+#[cfg(feature = "private-api")]
 async fn do_refresh_findmy_friends(state: &AppState) -> Result<(), AppError> {
     let api = state.require_private_api()?;
 
@@ -270,6 +311,11 @@ async fn do_refresh_findmy_friends(state: &AppState) -> Result<(), AppError> {
     Ok(())
 }
 
+#[cfg(not(feature = "private-api"))]
+async fn do_refresh_findmy_friends(_state: &AppState) -> Result<(), AppError> {
+    Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
+}
+
 // ---------------------------------------------------------------------------
 // FindMy key + device cache decryption
 // ---------------------------------------------------------------------------
@@ -286,6 +332,7 @@ async fn get_or_fetch_findmy_key(state: &AppState) -> Result<[u8; 32], AppError>
 
 /// Fetch the FindMy decryption key from the macOS Keychain via FindMy.app injection.
 /// Caches the key in AppState for subsequent use.
+#[cfg(feature = "private-api")]
 async fn fetch_findmy_key(state: &AppState) -> Result<[u8; 32], AppError> {
     let api = state.require_findmy_private_api()?;
 
@@ -318,6 +365,11 @@ async fn fetch_findmy_key(state: &AppState) -> Result<[u8; 32], AppError> {
     key.copy_from_slice(&key_bytes);
     *state.findmy_key.lock() = Some(key);
     Ok(key)
+}
+
+#[cfg(not(feature = "private-api"))]
+async fn fetch_findmy_key(_state: &AppState) -> Result<[u8; 32], AppError> {
+    Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
 }
 
 /// Read and decrypt the FindMy device + item caches from disk, merging into a single array.

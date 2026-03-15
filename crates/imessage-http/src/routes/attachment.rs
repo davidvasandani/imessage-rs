@@ -241,6 +241,7 @@ pub async fn download(
 }
 
 /// GET /api/v1/attachment/:guid/download/force [Private API]
+#[cfg(feature = "private-api")]
 pub async fn force_download(
     State(state): State<AppState>,
     Path(guid): Path<String>,

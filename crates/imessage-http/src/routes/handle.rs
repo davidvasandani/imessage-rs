@@ -154,6 +154,7 @@ pub async fn find(
 }
 
 /// GET /api/v1/handle/:guid/focus [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn get_focus_status(
     State(state): State<AppState>,
     Path(address): Path<String>,
@@ -255,6 +256,7 @@ async fn check_availability(
 }
 
 /// GET /api/v1/handle/availability/imessage [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn get_imessage_availability(
     State(state): State<AppState>,
     Query(params): Query<AvailabilityParams>,
@@ -263,6 +265,7 @@ pub async fn get_imessage_availability(
 }
 
 /// POST /api/v1/handle/availability/imessage [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn post_imessage_availability(
     State(state): State<AppState>,
     AppJson(body): AppJson<AvailabilityParams>,
@@ -272,6 +275,7 @@ pub async fn post_imessage_availability(
 
 /// GET /api/v1/handle/availability/facetime [Private API required]
 /// Note: dispatched by the Messages dylib (AccountActions), not FaceTime.
+#[cfg(feature = "private-api")]
 pub async fn get_facetime_availability(
     State(state): State<AppState>,
     Query(params): Query<AvailabilityParams>,
@@ -281,6 +285,7 @@ pub async fn get_facetime_availability(
 
 /// POST /api/v1/handle/availability/facetime [Private API required]
 /// Note: dispatched by the Messages dylib (AccountActions), not FaceTime.
+#[cfg(feature = "private-api")]
 pub async fn post_facetime_availability(
     State(state): State<AppState>,
     AppJson(body): AppJson<AvailabilityParams>,

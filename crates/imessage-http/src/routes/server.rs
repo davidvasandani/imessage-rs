@@ -42,24 +42,38 @@ pub async fn get_info(State(state): State<AppState>) -> Result<Json<Value>, AppE
     // Local IPs
     let (ipv4s, ipv6s) = get_local_ips();
 
+    #[cfg(feature = "private-api")]
     let helper_connected = if let Some(ref api) = state.private_api {
         api.is_connected().await
     } else {
         false
     };
+    #[cfg(not(feature = "private-api"))]
+    let helper_connected = false;
 
+    #[cfg(feature = "private-api")]
     let private_api_ready = state
         .private_api
         .as_ref()
         .is_some_and(|api| api.is_messages_ready());
+    #[cfg(not(feature = "private-api"))]
+    let private_api_ready = false;
+
+    #[cfg(feature = "private-api")]
     let facetime_private_api_ready = state
         .private_api
         .as_ref()
         .is_some_and(|api| api.is_facetime_ready());
+    #[cfg(not(feature = "private-api"))]
+    let facetime_private_api_ready = false;
+
+    #[cfg(feature = "private-api")]
     let findmy_private_api_ready = state
         .private_api
         .as_ref()
         .is_some_and(|api| api.is_findmy_ready());
+    #[cfg(not(feature = "private-api"))]
+    let findmy_private_api_ready = false;
 
     // macOS time sync: query NTP offset via sntp
     let time_sync = get_time_sync_offset().await;
@@ -307,10 +321,13 @@ pub async fn get_permissions(State(state): State<AppState>) -> Result<Json<Value
         .unwrap_or(false);
 
     // Private API readiness
+    #[cfg(feature = "private-api")]
     let private_api_ready = state
         .private_api
         .as_ref()
         .is_some_and(|api| api.is_messages_ready());
+    #[cfg(not(feature = "private-api"))]
+    let private_api_ready = false;
 
     // Check Accessibility permission via AXIsProcessTrusted
     let has_accessibility = check_accessibility();

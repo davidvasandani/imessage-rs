@@ -550,10 +550,15 @@ pub async fn send_text(
     let _cache_guard = SendCacheGuard::new(&state, body.temp_guid.as_deref());
 
     // Auto-stop typing indicator if one was active for this chat
+    #[cfg(feature = "private-api")]
     if state.typing_cache.lock().remove(&body.chat_guid)
         && let Ok(api) = state.require_private_api()
     {
         let _ = api.send_action(actions::stop_typing(&body.chat_guid)).await;
+    }
+    #[cfg(not(feature = "private-api"))]
+    {
+        state.typing_cache.lock().remove(&body.chat_guid);
     }
 
     // Reject conflicting styling params
@@ -831,10 +836,15 @@ pub async fn send_attachment(
     let _cache_guard = SendCacheGuard::new(&state, temp_guid.as_deref());
 
     // Auto-stop typing indicator if one was active for this chat
+    #[cfg(feature = "private-api")]
     if state.typing_cache.lock().remove(&chat_guid)
         && let Ok(api) = state.require_private_api()
     {
         let _ = api.send_action(actions::stop_typing(&chat_guid)).await;
+    }
+    #[cfg(not(feature = "private-api"))]
+    {
+        state.typing_cache.lock().remove(&chat_guid);
     }
 
     // Force private-api when features require it, even if client specified apple-script.
@@ -1166,10 +1176,15 @@ pub async fn send_attachment_chunk(
     let chat_guid_str = _chat_guid;
 
     // Auto-stop typing indicator if one was active for this chat
+    #[cfg(feature = "private-api")]
     if state.typing_cache.lock().remove(&chat_guid_str)
         && let Ok(api) = state.require_private_api()
     {
         let _ = api.send_action(actions::stop_typing(&chat_guid_str)).await;
+    }
+    #[cfg(not(feature = "private-api"))]
+    {
+        state.typing_cache.lock().remove(&chat_guid_str);
     }
 
     // Read all chunk files, sort by index, concatenate
@@ -1381,10 +1396,15 @@ pub async fn send_multipart(
     let _cache_guard = SendCacheGuard::new(&state, body.temp_guid.as_deref());
 
     // Auto-stop typing indicator if one was active for this chat
+    #[cfg(feature = "private-api")]
     if state.typing_cache.lock().remove(&body.chat_guid)
         && let Ok(api) = state.require_private_api()
     {
         let _ = api.send_action(actions::stop_typing(&body.chat_guid)).await;
+    }
+    #[cfg(not(feature = "private-api"))]
+    {
+        state.typing_cache.lock().remove(&body.chat_guid);
     }
 
     let api = state.require_private_api()?;
@@ -1649,6 +1669,7 @@ pub struct EditMessageBody {
 }
 
 /// POST /api/v1/message/:guid/edit [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn edit_message(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -1716,6 +1737,15 @@ pub async fn edit_message(
     Ok(Json(success_response_with_message("Message edited!", data)))
 }
 
+#[cfg(not(feature = "private-api"))]
+pub async fn edit_message(
+    State(_state): State<AppState>,
+    Path(_guid): Path<String>,
+    AppJson(_body): AppJson<EditMessageBody>,
+) -> Result<Json<Value>, AppError> {
+    Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
+}
+
 /// POST /api/v1/message/:guid/unsend body [Private API required]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1724,6 +1754,7 @@ pub struct UnsendMessageBody {
 }
 
 /// POST /api/v1/message/:guid/unsend [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn unsend_message(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -1778,7 +1809,17 @@ pub async fn unsend_message(
     Ok(Json(success_response_with_message("Message unsent!", data)))
 }
 
+#[cfg(not(feature = "private-api"))]
+pub async fn unsend_message(
+    State(_state): State<AppState>,
+    Path(_guid): Path<String>,
+    AppJson(_body): AppJson<UnsendMessageBody>,
+) -> Result<Json<Value>, AppError> {
+    Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
+}
+
 /// POST /api/v1/message/:guid/notify [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn notify_message(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -1834,6 +1875,14 @@ pub async fn notify_message(
     };
 
     Ok(Json(success_response(data)))
+}
+
+#[cfg(not(feature = "private-api"))]
+pub async fn notify_message(
+    State(_state): State<AppState>,
+    Path(_guid): Path<String>,
+) -> Result<Json<Value>, AppError> {
+    Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
 }
 
 /// GET /api/v1/message/:guid/embedded-media [Private API required]

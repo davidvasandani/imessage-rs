@@ -433,6 +433,7 @@ pub async fn create(
     let service = body.service.as_deref().unwrap_or("iMessage");
     let method = body.method.as_deref().unwrap_or("apple-script");
 
+    #[cfg(feature = "private-api")]
     if method == "private-api" {
         if body.message.as_deref().is_none_or(|m| m.is_empty()) {
             return Err(AppError::bad_request(
@@ -533,6 +534,11 @@ pub async fn create(
             "Successfully created chat!",
             data,
         )));
+    }
+
+    #[cfg(not(feature = "private-api"))]
+    if method == "private-api" {
+        return Err(AppError::imessage_error("Private API is not compiled (feature disabled)"));
     }
 
     // AppleScript chat creation
@@ -645,6 +651,7 @@ pub struct UpdateChatBody {
 }
 
 /// PUT /api/v1/chat/:guid [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn update(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -744,7 +751,17 @@ pub async fn update(
     )))
 }
 
+#[cfg(not(feature = "private-api"))]
+pub async fn update(
+    State(_state): State<AppState>,
+    Path(_guid): Path<String>,
+    AppJson(_body): AppJson<UpdateChatBody>,
+) -> Result<Json<Value>, AppError> {
+    Err(AppError::imessage_error("Private API is not compiled (feature disabled)"))
+}
+
 /// DELETE /api/v1/chat/:guid [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn delete_chat(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -814,6 +831,7 @@ pub async fn delete_chat(
 }
 
 /// POST /api/v1/chat/:guid/read [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn mark_read(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -842,6 +860,7 @@ pub async fn mark_read(
 }
 
 /// POST /api/v1/chat/:guid/unread [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn mark_unread(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -870,6 +889,7 @@ pub async fn mark_unread(
 }
 
 /// POST /api/v1/chat/:guid/leave [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn leave(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -888,6 +908,7 @@ pub async fn leave(
 }
 
 /// POST /api/v1/chat/:guid/typing [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn start_typing(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -908,6 +929,7 @@ pub async fn start_typing(
 }
 
 /// DELETE /api/v1/chat/:guid/typing [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn stop_typing(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -1013,6 +1035,7 @@ async fn toggle_participant(
 }
 
 /// POST /api/v1/chat/:guid/participant/add [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn add_participant(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -1030,6 +1053,7 @@ pub async fn add_participant(
 }
 
 /// POST /api/v1/chat/:guid/participant/remove [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn remove_participant(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -1047,6 +1071,7 @@ pub async fn remove_participant(
 }
 
 /// DELETE /api/v1/chat/:guid/participant [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn remove_participant_delete(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -1064,6 +1089,7 @@ pub async fn remove_participant_delete(
 }
 
 /// POST /api/v1/chat/:guid/icon [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn set_icon(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -1139,6 +1165,7 @@ pub async fn set_icon(
 }
 
 /// DELETE /api/v1/chat/:guid/icon [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn remove_icon(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -1179,6 +1206,7 @@ pub async fn remove_icon(
 }
 
 /// POST /api/v1/chat/:guid/share/contact [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn share_contact(
     State(state): State<AppState>,
     Path(guid): Path<String>,
@@ -1215,6 +1243,7 @@ pub async fn share_contact(
 }
 
 /// DELETE /api/v1/chat/:guid/:messageGuid [Private API required]
+#[cfg(feature = "private-api")]
 pub async fn delete_message(
     State(state): State<AppState>,
     Path((guid, message_guid)): Path<(String, String)>,
@@ -1264,6 +1293,7 @@ pub async fn delete_message(
 }
 
 /// GET /api/v1/chat/:guid/share/contact/status [Private API]
+#[cfg(feature = "private-api")]
 pub async fn share_contact_status(
     State(state): State<AppState>,
     Path(guid): Path<String>,
