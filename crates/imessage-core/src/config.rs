@@ -24,7 +24,7 @@ pub struct YamlConfig {
 }
 
 /// A webhook entry in YAML config.
-/// Can be a simple URL string or an object with url + events.
+/// Can be a simple URL string or an object with url + events (+ reaction filter).
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(untagged)]
 pub enum WebhookConfigEntry {
@@ -33,6 +33,14 @@ pub enum WebhookConfigEntry {
         url: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         events: Option<Vec<String>>,
+        /// Deliver reaction messages (tapbacks, emoji tapbacks, stickers —
+        /// anything with a non-null `associatedMessageType`) to this target.
+        /// Defaults to true, matching BlueBubbles, which emits them as
+        /// ordinary message events. Set false for a consumer that must never
+        /// treat a reaction as a new message (e.g. an agent that would start a
+        /// turn and reply to every tapback).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        include_reactions: Option<bool>,
     },
 }
 
@@ -188,6 +196,40 @@ pub fn setup_directories() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn webhook_entries_parse_simple_and_detailed_forms() {
+        // Same untagged shape as config.yml; JSON keeps this crate free of a
+        // YAML dependency (and Cargo.lock unchanged).
+        let json = r#"{"webhooks": [
+            "http://a/hook",
+            {"url": "http://b/hook", "events": ["new-message"], "include_reactions": false},
+            {"url": "http://c/hook"}
+        ]}"#;
+        let cfg: YamlConfig = serde_json::from_str(json).unwrap();
+        let hooks = cfg.webhooks.unwrap();
+        assert!(matches!(&hooks[0], WebhookConfigEntry::Simple(u) if u == "http://a/hook"));
+        match &hooks[1] {
+            WebhookConfigEntry::Detailed {
+                url,
+                events,
+                include_reactions,
+            } => {
+                assert_eq!(url, "http://b/hook");
+                assert_eq!(events.as_deref(), Some(&["new-message".to_string()][..]));
+                assert_eq!(*include_reactions, Some(false));
+            }
+            other => panic!("expected detailed entry, got {other:?}"),
+        }
+        assert!(matches!(
+            &hooks[2],
+            WebhookConfigEntry::Detailed {
+                events: None,
+                include_reactions: None,
+                ..
+            }
+        ));
+    }
 
     #[test]
     fn default_config_values() {

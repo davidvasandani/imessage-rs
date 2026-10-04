@@ -77,10 +77,12 @@ impl WebhookService {
             "data": data,
         });
 
+        let mut delivered = 0usize;
         for target in &targets {
-            if !Self::matches_event(target, event_type) {
+            if !Self::delivers(target, event_type, &data) {
                 continue;
             }
+            delivered += 1;
 
             let client = self.client.clone();
             let url = target.url.clone();
@@ -101,13 +103,26 @@ impl WebhookService {
             });
         }
 
-        info!(
-            "Dispatched '{event_type}' to {} matching webhooks",
-            targets
-                .iter()
-                .filter(|t| Self::matches_event(t, event_type))
-                .count()
-        );
+        info!("Dispatched '{event_type}' to {delivered} matching webhooks");
+    }
+
+    /// Whether `target` receives this event: its event filter matches and,
+    /// for a target that excludes reactions, the payload is not a reaction.
+    ///
+    /// A reaction is any message whose `associatedMessageType` is non-null.
+    /// The check is deliberately on presence, not value: BlueBubbles spells
+    /// the type as a string (`"love"`, `"-love"`, `"emoji"`, `"sticker"` …),
+    /// other producers use the raw integer code, and Apple keeps adding
+    /// codes. A consumer that must never treat a reaction as a new message
+    /// should not depend on recognising every spelling.
+    fn delivers(target: &WebhookTarget, event_type: &str, data: &Value) -> bool {
+        Self::matches_event(target, event_type)
+            && (target.include_reactions || !Self::is_reaction(data))
+    }
+
+    fn is_reaction(data: &Value) -> bool {
+        data.get("associatedMessageType")
+            .is_some_and(|v| !v.is_null())
     }
 
     /// Check if a webhook's event filter matches the given event type.
@@ -124,7 +139,83 @@ mod tests {
         WebhookTarget {
             url: "http://example.com".to_string(),
             events,
+            include_reactions: true,
         }
+    }
+
+    fn no_reactions_webhook() -> WebhookTarget {
+        WebhookTarget {
+            include_reactions: false,
+            ..test_webhook(vec!["new-message".to_string()])
+        }
+    }
+
+    #[test]
+    fn excluding_target_rejects_string_typed_tapbacks() {
+        // Regression: BlueBubbles-compatible payloads carry the tapback type
+        // as a STRING. A consumer guard written as `isinstance(t, int)` lets
+        // every one of these through and starts an agent turn per reaction.
+        let target = no_reactions_webhook();
+        for kind in [
+            "love",
+            "like",
+            "dislike",
+            "laugh",
+            "emphasize",
+            "question",
+            "-love",
+            "-laugh",
+            "emoji",
+            "-emoji",
+            "sticker",
+            "sticker-tapback",
+        ] {
+            let data = json!({"text": "Loved \u{201c}hi\u{201d}", "associatedMessageType": kind});
+            assert!(
+                !WebhookService::delivers(&target, "new-message", &data),
+                "string reaction {kind:?} must not be delivered"
+            );
+        }
+    }
+
+    #[test]
+    fn excluding_target_rejects_integer_typed_reactions() {
+        let target = no_reactions_webhook();
+        for code in [1000, 2000, 2005, 2006, 2007, 3000, 3006] {
+            let data = json!({"associatedMessageType": code});
+            assert!(!WebhookService::delivers(&target, "new-message", &data));
+        }
+    }
+
+    #[test]
+    fn excluding_target_still_receives_plain_messages() {
+        let target = no_reactions_webhook();
+        assert!(WebhookService::delivers(
+            &target,
+            "new-message",
+            &json!({"text": "hi", "associatedMessageType": null})
+        ));
+        assert!(WebhookService::delivers(
+            &target,
+            "new-message",
+            &json!({"text": "hi"})
+        ));
+        // ...but still honours its event filter.
+        assert!(!WebhookService::delivers(
+            &target,
+            "updated-message",
+            &json!({"text": "hi"})
+        ));
+    }
+
+    #[test]
+    fn default_target_receives_reactions() {
+        let target = test_webhook(vec!["*".to_string()]);
+        assert!(WebhookService::delivers(
+            &target,
+            "new-message",
+            &json!({"associatedMessageType": "love"})
+        ));
     }
 
     #[test]

@@ -144,6 +144,8 @@ fn parse_webhook_args(args: &[String]) -> Vec<WebhookConfigEntry> {
                 WebhookConfigEntry::Detailed {
                     url: url.to_string(),
                     events: Some(events),
+                    // CLI form has no reaction filter; use config.yml for that.
+                    include_reactions: None,
                 }
             } else {
                 WebhookConfigEntry::Simple(arg.clone())
@@ -291,7 +293,7 @@ mod tests {
             _ => panic!("Expected Simple variant"),
         }
         match &wh[1] {
-            WebhookConfigEntry::Detailed { url, events } => {
+            WebhookConfigEntry::Detailed { url, events, .. } => {
                 assert_eq!(url, "http://localhost:4000/hook");
                 assert_eq!(
                     events.as_ref().unwrap(),
@@ -408,7 +410,7 @@ webhooks:
         )
         .unwrap();
         match &yaml.webhooks.unwrap()[0] {
-            WebhookConfigEntry::Detailed { url, events } => {
+            WebhookConfigEntry::Detailed { url, events, .. } => {
                 assert_eq!(url, "http://localhost:3000/hook");
                 assert_eq!(events.as_ref().unwrap().len(), 2);
             }
