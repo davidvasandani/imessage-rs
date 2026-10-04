@@ -89,6 +89,14 @@ webhooks:
       - "new-message"
       - "updated-message"
       - "typing-indicator"
+
+  # New messages only, never reactions (tapbacks, emoji tapbacks, stickers —
+  # any message with a non-null associatedMessageType). For consumers such as
+  # chat agents that would otherwise treat every tapback as a new prompt.
+  # Defaults to true (BlueBubbles behaviour).
+  - url: "http://localhost:5000/webhook"
+    events: ["new-message"]
+    include_reactions: false
 ```
 
 #### Config Options

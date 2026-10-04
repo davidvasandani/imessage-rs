@@ -4,7 +4,7 @@ mod process;
 use anyhow::Result;
 use clap::Parser;
 use config::{CliArgs, Command, bootstrap_config, resolve_config};
-use imessage_core::config::{AppConfig, AppPaths, WebhookConfigEntry, setup_directories};
+use imessage_core::config::{AppConfig, AppPaths, setup_directories};
 use imessage_core::macos::{macos_version, require_min_sequoia};
 use imessage_db::imessage::repository::MessageRepository;
 use imessage_http::server::start_server;
@@ -137,20 +137,7 @@ async fn run_server(config: AppConfig) -> Result<()> {
     let webhook_service = Arc::new(WebhookService::new(&config));
     {
         use imessage_webhooks::WebhookTarget;
-        let targets: Vec<WebhookTarget> = config
-            .webhooks
-            .iter()
-            .map(|wh| match wh {
-                WebhookConfigEntry::Simple(url) => WebhookTarget {
-                    url: url.clone(),
-                    events: vec!["*".to_string()],
-                },
-                WebhookConfigEntry::Detailed { url, events } => WebhookTarget {
-                    url: url.clone(),
-                    events: events.clone().unwrap_or_else(|| vec!["*".to_string()]),
-                },
-            })
-            .collect();
+        let targets: Vec<WebhookTarget> = config.webhooks.iter().map(WebhookTarget::from).collect();
         info!("Loaded {} webhook targets", targets.len());
         webhook_service.set_targets(targets).await;
     }

@@ -509,6 +509,17 @@ impl MessageRepository {
             messages.push(row_result?);
         }
 
+        // The JOIN above only filters; it does not hydrate `msg.chats`. Fetch
+        // them separately, exactly as `get_message` does. The watcher builds
+        // `new-message` webhook payloads from this function, and without this
+        // every payload carried `"chats": []`, so consumers could not tell a
+        // group chat from a 1:1 thread or reply into the right one.
+        if params.with_chats {
+            for msg in &mut messages {
+                msg.chats = self.get_chats_for_message(msg.rowid)?;
+            }
+        }
+
         if params.with_attachments {
             for msg in &mut messages {
                 msg.attachments = self.get_attachments_for_message(msg.rowid)?;
@@ -897,6 +908,94 @@ impl MessageRepository {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Build a minimal on-disk chat.db whose tables carry exactly the columns
+    /// the repository selects, with one group chat and one 1:1 chat holding
+    /// one inbound message each. Returns the path; the caller removes it.
+    fn chat_db_fixture() -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "imessage-db-fixture-{}-{}.db",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let conn = Connection::open(&path).unwrap();
+        let schema = DetectedSchema::detect(&conn); // empty DB: base columns only
+        let create = |table: &str, cols: Vec<&str>| {
+            let cols: Vec<String> = cols
+                .iter()
+                .map(|c| c.trim_start_matches(&format!("{table}.")).to_string())
+                .filter(|c| c != "ROWID")
+                .collect();
+            conn.execute_batch(&format!(
+                "CREATE TABLE {table} (ROWID INTEGER PRIMARY KEY, {});",
+                cols.join(", ")
+            ))
+            .unwrap();
+        };
+        create("message", schema.message_select_columns());
+        create("chat", schema.chat_select_columns());
+        create("attachment", schema.attachment_select_columns());
+        conn.execute_batch(
+            "CREATE TABLE handle (ROWID INTEGER PRIMARY KEY, id, country, service, uncanonicalized_id);
+             CREATE TABLE chat_message_join (chat_id, message_id, message_date);
+             CREATE TABLE chat_handle_join (chat_id, handle_id);
+             CREATE TABLE message_attachment_join (message_id, attachment_id);
+             INSERT INTO handle (ROWID, id, service) VALUES (1, '+15550001111', 'iMessage');
+             INSERT INTO chat (ROWID, guid, style, chat_identifier)
+               VALUES (10, 'any;+;chat123456', 43, 'chat123456'),
+                      (11, 'any;-;+15550001111', 45, '+15550001111');
+             INSERT INTO message (ROWID, guid, text, handle_id, date, is_from_me)
+               VALUES (100, 'GROUP-MSG', 'hi group', 1, 1000, 0),
+                      (101, 'DM-MSG', 'hi you', 1, 2000, 0);
+             INSERT INTO chat_message_join (chat_id, message_id) VALUES (10, 100), (11, 101);",
+        )
+        .unwrap();
+        path
+    }
+
+    #[test]
+    fn updated_messages_with_chats_hydrates_chat_guid_and_style() {
+        let path = chat_db_fixture();
+        let repo = MessageRepository::open(path.clone()).unwrap();
+        let messages = repo
+            .get_updated_messages(&UpdatedMessageQueryParams {
+                with_chats: true,
+                limit: 10,
+                sort: SortOrder::Asc,
+                ..Default::default()
+            })
+            .unwrap();
+        let _ = std::fs::remove_file(&path);
+
+        let by_guid = |g: &str| messages.iter().find(|m| m.guid == g).unwrap();
+        let group = by_guid("GROUP-MSG");
+        assert_eq!(group.chats.len(), 1);
+        assert_eq!(group.chats[0].guid, "any;+;chat123456");
+        assert_eq!(group.chats[0].style, 43);
+        let dm = by_guid("DM-MSG");
+        assert_eq!(dm.chats.len(), 1);
+        assert_eq!(dm.chats[0].guid, "any;-;+15550001111");
+        assert_eq!(dm.chats[0].style, 45);
+    }
+
+    #[test]
+    fn updated_messages_without_chats_leaves_chats_empty() {
+        let path = chat_db_fixture();
+        let repo = MessageRepository::open(path.clone()).unwrap();
+        let messages = repo
+            .get_updated_messages(&UpdatedMessageQueryParams {
+                with_chats: false,
+                limit: 10,
+                ..Default::default()
+            })
+            .unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(messages.len(), 2);
+        assert!(messages.iter().all(|m| m.chats.is_empty()));
+    }
 
     #[test]
     fn expand_simple_named_param() {
